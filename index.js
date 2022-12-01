@@ -1,6 +1,8 @@
 const express = require('express');
 const cors = require('cors');
 const jwt = require('jsonwebtoken');
+const nodemailer = require('nodemailer');
+const mg = require('nodemailer-mailgun-transport');
 require('dotenv').config();
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const app = express();
@@ -14,6 +16,48 @@ app.use(express.json());
 
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.leesidy.mongodb.net/?retryWrites=true&w=majority`;
 const client = new MongoClient(uri, { useNewUrlParser: true, useUnifiedTopology: true, serverApi: ServerApiVersion.v1 });
+
+function sendBookingEmail(booking) {
+    const { email, treatment, appointDate, slot } = booking;
+    // let transporter = nodemailer.createTransport({
+    //     host: 'smtp.sendgrid.net',
+    //     port: 587,
+    //     auth: {
+    //         user: "V_rJ5kjGQY2P_kMZboU0SQ",
+    //         pass: process.env.SENDGRID_API_KEY
+    //     }
+    // });
+
+    const auth = {
+        auth: {
+            api_key: process.env.EMAIL_SEND_API,
+            domain: process.env.EMAIL_SEND_DOMAIN
+        }
+    }
+
+    const transporter = nodemailer.createTransport(mg(auth));
+
+    transporter.sendMail({
+        from: "abusiam06@gmail.com", // verified sender email
+        to: email, // recipient email
+        subject: `Your appointment for ${treatment} is confirmed`, // Subject line
+        text: "Your appointment is confirmed", // plain text body
+        html: `
+        <h1>Your appointment is confirmed</h1>
+        <div>
+            <p>Your appointment for : ${treatment}</p>
+            <p>Please visit us on ${appointDate} at ${slot}</p>
+            <p>Thanks from doctors portal</p>
+        </div>
+        `, // html body
+    }, function (error, info) {
+        if (error) {
+            console.log(error);
+        } else {
+            console.log('Email sent: ' + info.response);
+        }
+    });
+}
 
 function verifyJWT(req, res, next) {
     const authHeader = req.headers.authorization;
@@ -101,6 +145,8 @@ async function run() {
                 return res.send({ acknowledged: false, message });
             }
             const result = await bookingCollection.insertOne(booking);
+            //send confirmation email
+            sendBookingEmail(booking);
             res.send(result);
         })
 
